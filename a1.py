@@ -1,25 +1,19 @@
 import cv2
 import numpy as np
 import mediapipe as mp
-from pyobjc import AudioUtilities, IAudioEndpointVolume
-from comtypes import CLSCTX_ALL
+import subprocess
 from math import hypot
 import screen_brightness_control as sbc
+
+def set_macos_volume(percent):
+    percent = int(np.clip(percent, 0, 100))
+    subprocess.run(["osascript", "-e", f"set volume output volume {percent}"],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL)
 
 mp_hands = mp.solutions.hands
 hands=mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 mp_draw = mp.solutions.drawing_utils
-
-try:
-    devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    volume = interface.QueryInterface(IAudioEndpointVolume)
-    vol_range = volume.GetVolumeRange()
-    min_vol = vol_range[0]
-    max_vol = vol_range[1]
-except Exception as e:
-    print(f"Error initializing Pycaw: {e}")
-    exit()
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
@@ -56,16 +50,12 @@ while True:
             distance=hypot(index_pos[0]-thumb_pos[0], index_pos[1]-thumb_pos[1])
 
             if hand_label == "Right":
-                vol = np.interp(distance, [30, 300], [min_vol, max_vol])
-                try:
-                    volume.SetMasterVolumeLevel(vol, None)
-                except Exception as e:
-                    print(f"Error adjusting volume: {e}")
-
+                volume_percent = np.interp(distance, [30, 300], [0, 100])
+                set_macos_volume(volume_percent)
                 vol_bar = np.interp(distance, [30, 300], [400, 150])
                 cv2.rectangle(img, (50, 150), (85, 400), (255, 0, 0), 2)
                 cv2.rectangle(img, (50, int(vol_bar)), (85, 400), (255, 0, 0), cv2.FILLED)
-                cv2.put_Text(img, f'Volume: {int(np.interp(distance, [30, 300], [0, 100]))} %', (40, 450), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 3)
+                cv2.putText(img,f'Volume: {int(volume_percent)} %',(40, 450),cv2.FONT_HERSHEY_COMPLEX,1,(255, 0, 0),3)
 
             elif hand_label=="Left":
                 brightness = np.interp(distance, [30, 300], [0, 100])
@@ -77,7 +67,7 @@ while True:
                 brightness_bar = np.interp(distance, [30, 300], [400, 150])
                 cv2.rectangle(img, (100, 150), (135, 400), (0, 255, 0), 2)
                 cv2.rectangle(img, (100, int(brightness_bar)), (135, 400), (0, 255, 0), cv2.FILLED)
-                cv2.put_Text(img, f'Brightness: {int(brightness)} %', (90, 450), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 3)
+                cv2.putText(img, f'Brightness: {int(brightness)} %', (90, 450), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 3)
 
         cv2.imshow("Gesture Volume and Brightness Controller", img)
 
